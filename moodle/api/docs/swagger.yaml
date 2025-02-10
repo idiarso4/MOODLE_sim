@@ -1,0 +1,159 @@
+openapi: 3.0.0
+info:
+  title: Attendance Management API
+  version: 1.0.0
+  description: API for managing class attendance using facial recognition and QR codes
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, TEACHER, STUDENT]
+
+    Class:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        teacherId:
+          type: string
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Schedule'
+
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+        classId:
+          type: string
+        dayOfWeek:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+
+paths:
+  /user/login:
+    post:
+      summary: Authenticate user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+
+  /attendance/face:
+    post:
+      summary: Mark attendance using facial recognition
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionId:
+                  type: string
+                image:
+                  type: string
+                location:
+                  type: object
+                  properties:
+                    lat:
+                      type: number
+                    lng:
+                      type: number
+      responses:
+        '200':
+          description: Attendance marked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  method:
+                    type: string
+                    enum: [FACE]
+
+  /attendance/report:
+    get:
+      summary: Get attendance report
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: classId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalSessions:
+                    type: integer
+                  attendances:
+                    type: array
+                    items:
+                      type: object

@@ -1,0 +1,12 @@
+{
+  "name": "moodle-face-api",
+  "version": "1.0.0",
+  "description": "API Middleware for Moodle Face Recognition",
+  "main": "app.js",
+  "dependencies": {
+    "express": "^4.17.1",
+    "axios": "^0.21.1",
+    "cors": "^2.8.5",
+    "dotenv": "^10.0.0"
+  }
+}

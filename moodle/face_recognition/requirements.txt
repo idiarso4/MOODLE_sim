@@ -1,0 +1,5 @@
+deepface==0.0.79
+flask==2.0.1
+numpy==1.21.0
+opencv-python-headless==4.5.3.56
+requests==2.26.0

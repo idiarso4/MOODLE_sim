@@ -1,0 +1,190 @@
+version: '3.8'
+services:
+  db:
+    image: mariadb:10.6
+    container_name: moodle_db
+    environment:
+      MYSQL_ROOT_PASSWORD: moodle_root_password
+      MYSQL_DATABASE: moodle
+      MYSQL_USER: moodle
+      MYSQL_PASSWORD: moodle_password
+    volumes:
+      - moodledb_data:/var/lib/mysql
+    networks:
+      - moodle_network
+
+  moodle:
+    image: bitnami/moodle:latest
+    container_name: moodle_app
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      - MOODLE_DATABASE_HOST=db
+      - MOODLE_DATABASE_PORT_NUMBER=3306
+      - MOODLE_DATABASE_USER=moodle
+      - MOODLE_DATABASE_PASSWORD=moodle_password
+      - MOODLE_DATABASE_NAME=moodle
+      - MOODLE_USERNAME=admin
+      - MOODLE_PASSWORD=admin_password
+      - MOODLE_EMAIL=admin@localhost
+      - MOODLE_SITE_NAME=SMK Moodle
+      - MOODLE_SKIP_BOOTSTRAP=no
+      - MOODLE_SKIP_INSTALL=no
+    volumes:
+      - moodle_data:/bitnami/moodle
+      - ./plugins:/bitnami/moodle/mod  # untuk plugin tambahan
+    depends_on:
+      - db
+    networks:
+      - moodle_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: moodle_phpmyadmin
+    ports:
+      - "8081:80"
+    environment:
+      - PMA_HOST=db
+      - PMA_USER=root
+      - PMA_PASSWORD=moodle_root_password
+    depends_on:
+      - db
+    networks:
+      - moodle_network
+
+  attendance_frontend:
+    build:
+      context: ./attendance-app
+      dockerfile: Dockerfile
+    container_name: attendance_frontend
+    ports:
+      - "3001:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3000
+    depends_on:
+      - api_middleware
+    networks:
+      - moodle_network
+
+  face_recognition:
+    build:
+      context: ./face_recognition
+      dockerfile: Dockerfile
+    container_name: face_recognition_service
+    volumes:
+      - face_data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "5000:5000"
+    networks:
+      - moodle_network
+
+  api_middleware:
+    build:
+      context: ./api_middleware
+      dockerfile: Dockerfile
+    container_name: api_middleware_service
+    environment:
+      - MOODLE_URL=http://moodle:8080
+      - FACE_RECOGNITION_URL=http://face_recognition:5000
+      - MOODLE_TOKEN=your_moodle_token
+    ports:
+      - "3000:3000"
+    depends_on:
+      - moodle
+      - face_recognition
+    networks:
+      - moodle_network
+
+  api:
+    build: ./api
+    ports:
+      - "3002:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/attendance
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your_jwt_secret
+    depends_on:
+      - db
+      - redis
+      - prometheus
+    networks:
+      - moodle_network
+
+  db_monitor:
+    image: postgres:13
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=attendance
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - moodle_network
+
+  redis:
+    image: redis:6
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - moodle_network
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - moodle_network
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - moodle_network
+
+  backup:
+    image: postgres:13
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=attendance
+    entrypoint: ["/scripts/backup.sh"]
+    depends_on:
+      - db
+    networks:
+      - moodle_network
+
+volumes:
+  moodledb_data:
+  moodle_data:
+  face_data:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  moodle_network:
+    driver: bridge
