@@ -1,26 +1,26 @@
-import { PrismaClient, AuditLog } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { Request } from 'express';
 
 export interface AuditLogData {
-  userId: string;
+  userId?: string;
   action: string;
   resource: string;
-  details: any;
-  ipAddress: string;
-  userAgent: string;
+  details?: any;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 export class AuditLogService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(data: AuditLogData): Promise<AuditLog> {
+  async create(data: AuditLogData) {
     try {
-      return await this.prisma.auditLog.create({
+      return await this.prisma.audit_logs.create({
         data: {
           userId: data.userId,
           action: data.action,
           resource: data.resource,
-          details: data.details,
+          details: data.details as Prisma.JsonValue,
           ipAddress: data.ipAddress,
           userAgent: data.userAgent,
           timestamp: new Date()
@@ -32,29 +32,29 @@ export class AuditLogService {
     }
   }
 
-  async getByUserId(userId: string): Promise<AuditLog[]> {
-    return this.prisma.auditLog.findMany({
+  async getByUserId(userId: string) {
+    return this.prisma.audit_logs.findMany({
       where: { userId },
       orderBy: { timestamp: 'desc' }
     });
   }
 
-  async getByResource(resource: string): Promise<AuditLog[]> {
-    return this.prisma.auditLog.findMany({
+  async getByResource(resource: string) {
+    return this.prisma.audit_logs.findMany({
       where: { resource },
       orderBy: { timestamp: 'desc' }
     });
   }
 
-  async getByAction(action: string): Promise<AuditLog[]> {
-    return this.prisma.auditLog.findMany({
+  async getByAction(action: string) {
+    return this.prisma.audit_logs.findMany({
       where: { action },
       orderBy: { timestamp: 'desc' }
     });
   }
 
-  async getByTimeRange(startDate: Date, endDate: Date): Promise<AuditLog[]> {
-    return this.prisma.auditLog.findMany({
+  async getByTimeRange(startDate: Date, endDate: Date) {
+    return this.prisma.audit_logs.findMany({
       where: {
         timestamp: {
           gte: startDate,
@@ -65,7 +65,7 @@ export class AuditLogService {
     });
   }
 
-  async createFromRequest(req: Request, action: string, resource: string, details: any = {}): Promise<AuditLog> {
+  async createFromRequest(req: Request, action: string, resource: string, details: any = {}) {
     const userId = (req.user as any)?.id || 'anonymous';
     const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
@@ -99,22 +99,21 @@ export class AuditLogService {
       limit = 10
     } = filters;
 
-    const where: any = {};
-    
-    if (userId) where.userId = userId;
-    if (action) where.action = action;
-    if (resource) where.resource = resource;
-    if (startDate || endDate) {
-      where.timestamp = {};
-      if (startDate) where.timestamp.gte = startDate;
-      if (endDate) where.timestamp.lte = endDate;
-    }
+    const where = {
+      userId: userId ? { equals: userId } : undefined,
+      action: action ? { equals: action } : undefined,
+      resource: resource ? { equals: resource } : undefined,
+      timestamp: (startDate || endDate) ? {
+        gte: startDate,
+        lte: endDate
+      } : undefined
+    };
 
     const skip = (page - 1) * limit;
 
     const [total, logs] = await Promise.all([
-      this.prisma.auditLog.count({ where }),
-      this.prisma.auditLog.findMany({
+      this.prisma.audit_logs.count({ where }),
+      this.prisma.audit_logs.findMany({
         where,
         orderBy: { timestamp: 'desc' },
         skip,
@@ -122,9 +121,9 @@ export class AuditLogService {
         include: {
           user: {
             select: {
+              id: true,
               name: true,
-              email: true,
-              role: true
+              email: true
             }
           }
         }
@@ -133,12 +132,10 @@ export class AuditLogService {
 
     return {
       logs,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit)
-      }
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
     };
   }
 }

@@ -102,6 +102,23 @@ services:
     networks:
       - moodle_network
 
+  api:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: moodle_api
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/attendance_db
+      - JWT_SECRET=your_jwt_secret_key
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+    networks:
+      - moodle_network
+    restart: unless-stopped
+
 networks:
   moodle_network:
     driver: bridge
