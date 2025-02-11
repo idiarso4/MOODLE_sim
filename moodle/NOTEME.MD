@@ -665,3 +665,15 @@ Perubahan utama:
 
 Kedua implementasi ini bersifat sementara dan dapat dengan mudah diganti dengan Redis di masa depan tanpa mengubah interface yang digunakan oleh kode lain.
 
+-----------------
+
+Moodle sudah berhasil dijalankan. Sekarang Anda bisa mengakses:
+
+Moodle di http://localhost:8080
+Username: admin
+Password: admin_password
+PHPMyAdmin di http://localhost:8081
+Username: root
+Password: moodle_root_password
+
+----------

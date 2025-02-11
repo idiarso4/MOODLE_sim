@@ -49,34 +49,48 @@ def verify_face():
         image_base64 = data['image']
         
         # Save temporary image
-        temp_path = os.path.join(UPLOAD_FOLDER, 'temp.jpg')
-        save_base64_image(image_base64, temp_path)
+        temp_image_path = os.path.join(UPLOAD_FOLDER, 'temp.jpg')
+        save_base64_image(image_base64, temp_image_path)
         
-        # Find matching face
-        result = DeepFace.find(
-            img_path=temp_path,
-            db_path=UPLOAD_FOLDER,
-            model_name="Facenet"
-        )
+        # Get all registered faces
+        registered_faces = [f for f in os.listdir(UPLOAD_FOLDER) if f.endswith('.jpg') and f != 'temp.jpg']
         
-        if len(result) > 0:
-            matched_path = result[0].identity[0]
-            student_id = os.path.splitext(os.path.basename(matched_path))[0]
-            return jsonify({
-                'status': 'success',
-                'matched': True,
-                'student_id': student_id
-            })
+        for face in registered_faces:
+            try:
+                # Compare faces
+                result = DeepFace.verify(
+                    img1_path=temp_image_path,
+                    img2_path=os.path.join(UPLOAD_FOLDER, face),
+                    model_name="Facenet",
+                    distance_metric="cosine"
+                )
+                
+                if result["verified"]:
+                    student_id = face.replace('.jpg', '')
+                    return jsonify({
+                        'status': 'success',
+                        'verified': True,
+                        'student_id': student_id,
+                        'confidence': result["distance"]
+                    })
+            except Exception as e:
+                continue
         
         return jsonify({
             'status': 'success',
-            'matched': False
+            'verified': False,
+            'message': 'No matching face found'
         })
+        
     except Exception as e:
         return jsonify({
             'status': 'error',
             'message': str(e)
         }), 400
+    finally:
+        # Clean up temporary file
+        if os.path.exists(temp_image_path):
+            os.remove(temp_image_path)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

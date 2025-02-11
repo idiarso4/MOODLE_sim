@@ -1,65 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1739211505905" clover="3.2.0">
-  <project timestamp="1739211505905" name="All files">
-    <metrics statements="47" coveredstatements="12" conditionals="8" coveredconditionals="0" methods="12" coveredmethods="2" elements="67" coveredelements="14" complexity="0" loc="47" ncloc="47" packages="2" files="2" classes="2"/>
-    <package name="services">
-      <metrics statements="32" coveredstatements="6" conditionals="8" coveredconditionals="0" methods="6" coveredmethods="2"/>
-      <file name="ClassService.ts" path="C:\Users\hy\Documents\APLIKASI\APP4\moodle\api\src\services\ClassService.ts">
-        <metrics statements="32" coveredstatements="6" conditionals="8" coveredconditionals="0" methods="6" coveredmethods="2"/>
-        <line num="1" count="1" type="stmt"/>
-        <line num="2" count="1" type="stmt"/>
-        <line num="4" count="1" type="stmt"/>
-        <line num="6" count="1" type="stmt"/>
-        <line num="17" count="2" type="stmt"/>
-        <line num="21" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="22" count="0" type="stmt"/>
-        <line num="26" count="0" type="stmt"/>
-        <line num="49" count="0" type="stmt"/>
-        <line num="53" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="54" count="0" type="stmt"/>
-        <line num="58" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="59" count="0" type="stmt"/>
-        <line num="63" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="64" count="0" type="stmt"/>
-        <line num="68" count="0" type="stmt"/>
-        <line num="80" count="0" type="stmt"/>
-        <line num="84" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="85" count="0" type="stmt"/>
-        <line num="89" count="0" type="stmt"/>
-        <line num="120" count="1" type="stmt"/>
-        <line num="124" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="125" count="0" type="stmt"/>
-        <line num="129" count="0" type="stmt"/>
-        <line num="136" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="137" count="0" type="stmt"/>
-        <line num="141" count="0" type="stmt"/>
-        <line num="142" count="0" type="stmt"/>
-        <line num="151" count="0" type="stmt"/>
-        <line num="174" count="0" type="cond" truecount="0" falsecount="1"/>
-        <line num="175" count="0" type="stmt"/>
-        <line num="178" count="0" type="stmt"/>
-      </file>
-    </package>
-    <package name="utils">
-      <metrics statements="15" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="6" coveredmethods="0"/>
-      <file name="errors.ts" path="C:\Users\hy\Documents\APLIKASI\APP4\moodle\api\src\utils\errors.ts">
-        <metrics statements="15" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="6" coveredmethods="0"/>
-        <line num="1" count="1" type="stmt"/>
-        <line num="6" count="0" type="stmt"/>
-        <line num="7" count="0" type="stmt"/>
-        <line num="8" count="0" type="stmt"/>
-        <line num="9" count="0" type="stmt"/>
-        <line num="13" count="1" type="stmt"/>
-        <line num="15" count="0" type="stmt"/>
-        <line num="19" count="1" type="stmt"/>
-        <line num="21" count="0" type="stmt"/>
-        <line num="25" count="1" type="stmt"/>
-        <line num="27" count="0" type="stmt"/>
-        <line num="31" count="1" type="stmt"/>
-        <line num="33" count="0" type="stmt"/>
-        <line num="37" count="1" type="stmt"/>
-        <line num="39" count="0" type="stmt"/>
-      </file>
-    </package>
+<coverage generated="1739273991658" clover="3.2.0">
+  <project timestamp="1739273991659" name="All files">
+    <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0" elements="0" coveredelements="0" complexity="0" loc="0" ncloc="0" packages="0" files="0" classes="0"/>
   </project>
 </coverage>

@@ -2,7 +2,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/src', '<rootDir>/tests'],
+  roots: ['<rootDir>/src'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest'
   },
@@ -18,5 +18,6 @@ module.exports = {
       lines: 80,
       statements: 80
     }
-  }
+  },
+  setupFilesAfterEnv: ['<rootDir>/src/tests/setup.ts']
 };

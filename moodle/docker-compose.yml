@@ -12,6 +12,8 @@ services:
       - moodledb_data:/var/lib/mysql
     networks:
       - moodle_network
+    ports:
+      - "3306:3306"
 
   moodle:
     image: bitnami/moodle:latest
@@ -31,13 +33,15 @@ services:
       - MOODLE_SITE_NAME=SMK Moodle
       - MOODLE_SKIP_BOOTSTRAP=no
       - MOODLE_SKIP_INSTALL=no
+      - ALLOW_EMPTY_PASSWORD=no
+      - BITNAMI_DEBUG=true
     volumes:
       - moodle_data:/bitnami/moodle
-      - ./plugins:/bitnami/moodle/mod  # untuk plugin tambahan
     depends_on:
       - db
     networks:
       - moodle_network
+    restart: unless-stopped
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
@@ -53,138 +57,58 @@ services:
     networks:
       - moodle_network
 
-  attendance_frontend:
-    build:
-      context: ./attendance-app
-      dockerfile: Dockerfile
-    container_name: attendance_frontend
-    ports:
-      - "3001:80"
-    environment:
-      - REACT_APP_API_URL=http://localhost:3000
-    depends_on:
-      - api_middleware
-    networks:
-      - moodle_network
-
-  face_recognition:
-    build:
-      context: ./face_recognition
-      dockerfile: Dockerfile
-    container_name: face_recognition_service
-    volumes:
-      - face_data:/app/data
-    environment:
-      - PYTHONUNBUFFERED=1
-    ports:
-      - "5000:5000"
-    networks:
-      - moodle_network
-
-  api_middleware:
-    build:
-      context: ./api_middleware
-      dockerfile: Dockerfile
-    container_name: api_middleware_service
-    environment:
-      - MOODLE_URL=http://moodle:8080
-      - FACE_RECOGNITION_URL=http://face_recognition:5000
-      - MOODLE_TOKEN=your_moodle_token
-    ports:
-      - "3000:3000"
-    depends_on:
-      - moodle
-      - face_recognition
-    networks:
-      - moodle_network
-
-  api:
-    build: ./api
-    ports:
-      - "3002:3000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/attendance
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=your_jwt_secret
-    depends_on:
-      - db
-      - redis
-      - prometheus
-    networks:
-      - moodle_network
-
-  db_monitor:
-    image: postgres:13
-    ports:
-      - "5433:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=attendance
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
-    networks:
-      - moodle_network
-
-  redis:
-    image: redis:6
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - moodle_network
-
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
       - "9090:9090"
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
     networks:
       - moodle_network
 
   grafana:
-    image: grafana/grafana
-    ports:
-      - "3003:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+    image: grafana/grafana:latest
     volumes:
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3001:3000"
+    networks:
+      - moodle_network
     depends_on:
       - prometheus
-    networks:
-      - moodle_network
 
-  backup:
-    image: postgres:13
-    volumes:
-      - ./backups:/backups
-      - ./scripts:/scripts
+  postgres:
+    image: postgres:14
     environment:
-      - POSTGRES_HOST=db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=attendance
-    entrypoint: ["/scripts/backup.sh"]
-    depends_on:
-      - db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: attendance_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - moodle_network
-
-volumes:
-  moodledb_data:
-  moodle_data:
-  face_data:
-  postgres_data:
-  redis_data:
-  prometheus_data:
-  grafana_data:
 
 networks:
   moodle_network:
     driver: bridge
+
+volumes:
+  moodledb_data:
+  moodle_data:
+  prometheus_data:
+  grafana_data:
+  postgres_data:

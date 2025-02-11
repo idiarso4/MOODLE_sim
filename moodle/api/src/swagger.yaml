@@ -1,0 +1,237 @@
+openapi: 3.0.0
+info:
+  title: Attendance System API
+  version: 1.0.0
+  description: API documentation for the Attendance System
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            email:
+              type: string
+            name:
+              type: string
+            role:
+              type: string
+
+    AttendanceFaceRequest:
+      type: object
+      required:
+        - image
+        - location
+      properties:
+        image:
+          type: string
+          format: base64
+        location:
+          type: object
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+
+    AttendanceQRRequest:
+      type: object
+      required:
+        - qrData
+        - location
+      properties:
+        qrData:
+          type: string
+        location:
+          type: object
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+
+    AttendanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        attendanceId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    AttendanceReport:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              userId:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+              method:
+                type: string
+              location:
+                type: object
+                properties:
+                  latitude:
+                    type: number
+                  longitude:
+                    type: number
+        stats:
+          type: object
+          properties:
+            total:
+              type: number
+            byMethod:
+              type: object
+              additionalProperties:
+                type: number
+
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+
+  /attendance/face:
+    post:
+      summary: Record attendance using face recognition
+      security:
+        - bearerAuth: []
+      tags:
+        - Attendance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceFaceRequest'
+      responses:
+        '200':
+          description: Attendance recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceResponse'
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid request
+
+  /attendance/qr:
+    post:
+      summary: Record attendance using QR code
+      security:
+        - bearerAuth: []
+      tags:
+        - Attendance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceQRRequest'
+      responses:
+        '200':
+          description: Attendance recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceResponse'
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid request
+
+  /attendance/report:
+    get:
+      summary: Get attendance report
+      security:
+        - bearerAuth: []
+      tags:
+        - Reports
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date-time
+          required: true
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date-time
+          required: true
+        - in: query
+          name: userId
+          schema:
+            type: string
+        - in: query
+          name: classId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Attendance report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceReport'
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid request parameters
