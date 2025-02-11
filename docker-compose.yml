@@ -1,0 +1,114 @@
+version: '3.8'
+services:
+  db:
+    image: mariadb:10.6
+    container_name: moodle_db
+    environment:
+      MYSQL_ROOT_PASSWORD: moodle_root_password
+      MYSQL_DATABASE: moodle
+      MYSQL_USER: moodle
+      MYSQL_PASSWORD: moodle_password
+    volumes:
+      - moodledb_data:/var/lib/mysql
+    networks:
+      - moodle_network
+    ports:
+      - "3306:3306"
+
+  moodle:
+    image: bitnami/moodle:latest
+    container_name: moodle_app
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      - MOODLE_DATABASE_HOST=db
+      - MOODLE_DATABASE_PORT_NUMBER=3306
+      - MOODLE_DATABASE_USER=moodle
+      - MOODLE_DATABASE_PASSWORD=moodle_password
+      - MOODLE_DATABASE_NAME=moodle
+      - MOODLE_USERNAME=admin
+      - MOODLE_PASSWORD=admin_password
+      - MOODLE_EMAIL=admin@localhost
+      - MOODLE_SITE_NAME=SMK Moodle
+      - MOODLE_SKIP_BOOTSTRAP=no
+      - MOODLE_SKIP_INSTALL=no
+      - ALLOW_EMPTY_PASSWORD=no
+      - BITNAMI_DEBUG=true
+    volumes:
+      - moodle_data:/bitnami/moodle
+    depends_on:
+      - db
+    networks:
+      - moodle_network
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: moodle_phpmyadmin
+    ports:
+      - "8081:80"
+    environment:
+      - PMA_HOST=db
+      - PMA_USER=root
+      - PMA_PASSWORD=moodle_root_password
+    depends_on:
+      - db
+    networks:
+      - moodle_network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - moodle_network
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3001:3000"
+    networks:
+      - moodle_network
+    depends_on:
+      - prometheus
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: attendance_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - moodle_network
+
+networks:
+  moodle_network:
+    driver: bridge
+
+volumes:
+  moodledb_data:
+  moodle_data:
+  prometheus_data:
+  grafana_data:
+  postgres_data:

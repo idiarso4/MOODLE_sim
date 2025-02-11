@@ -1,0 +1,141 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String        @unique
+  name          String
+  role          Role          @default(STUDENT)
+  password      String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  attendances   Attendance[]
+  notifications Notification[]
+  classes       Class[]       @relation("ClassTeacher")
+  enrollments   Enrollment[]
+}
+
+model Class {
+  id          String       @id @default(uuid())
+  name        String
+  code        String       @unique
+  teacherId   String
+  teacher     User         @relation("ClassTeacher", fields: [teacherId], references: [id])
+  schedule    Schedule[]
+  enrollments Enrollment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Schedule {
+  id        String       @id @default(uuid())
+  classId   String
+  class     Class        @relation(fields: [classId], references: [id])
+  dayOfWeek Int         // 0-6 (Minggu-Sabtu)
+  startTime String      // Format: HH:mm
+  endTime   String      // Format: HH:mm
+  sessions  Session[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Session {
+  id          String       @id @default(uuid())
+  scheduleId  String
+  schedule    Schedule     @relation(fields: [scheduleId], references: [id])
+  date        DateTime
+  qrCode      String?     // QR code untuk sesi ini
+  status      SessionStatus @default(SCHEDULED)
+  attendances Attendance[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Enrollment {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, classId])
+}
+
+model Attendance {
+  id        String          @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  sessionId String
+  session   Session        @relation(fields: [sessionId], references: [id])
+  status    AttendanceStatus
+  method    AttendanceMethod
+  location  Json?          // { lat: float, lng: float }
+  imageUrl  String?        // URL to stored face image
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  type      NotificationType
+  message   String
+  read      Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  userId    String?
+  action    String
+  resource  String
+  details   Json?
+  ipAddress String?
+  userAgent String?
+
+  @@map("audit_logs")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum SessionStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+enum AttendanceMethod {
+  FACE
+  QR_CODE
+  MANUAL
+}
+
+enum NotificationType {
+  ATTENDANCE
+  WARNING
+  INFO
+  SUCCESS
+}
