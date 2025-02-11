@@ -15,7 +15,7 @@ export class AuditLogService {
 
   async create(data: AuditLogData) {
     try {
-      return await this.prisma.audit_logs.create({
+      return await this.prisma.auditLog.create({
         data: {
           userId: data.userId,
           action: data.action,
@@ -33,28 +33,28 @@ export class AuditLogService {
   }
 
   async getByUserId(userId: string) {
-    return this.prisma.audit_logs.findMany({
+    return this.prisma.auditLog.findMany({
       where: { userId },
       orderBy: { timestamp: 'desc' }
     });
   }
 
   async getByResource(resource: string) {
-    return this.prisma.audit_logs.findMany({
+    return this.prisma.auditLog.findMany({
       where: { resource },
       orderBy: { timestamp: 'desc' }
     });
   }
 
   async getByAction(action: string) {
-    return this.prisma.audit_logs.findMany({
+    return this.prisma.auditLog.findMany({
       where: { action },
       orderBy: { timestamp: 'desc' }
     });
   }
 
   async getByTimeRange(startDate: Date, endDate: Date) {
-    return this.prisma.audit_logs.findMany({
+    return this.prisma.auditLog.findMany({
       where: {
         timestamp: {
           gte: startDate,
@@ -112,8 +112,8 @@ export class AuditLogService {
     const skip = (page - 1) * limit;
 
     const [total, logs] = await Promise.all([
-      this.prisma.audit_logs.count({ where }),
-      this.prisma.audit_logs.findMany({
+      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.findMany({
         where,
         orderBy: { timestamp: 'desc' },
         skip,
