@@ -1,8 +1,10 @@
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-256-bit-secret';
 const IV_LENGTH = 16; // For AES, this is always 16
 const ALGORITHM = 'aes-256-cbc';
+const SALT_ROUNDS = 10;
 
 export class EncryptionService {
   private static instance: EncryptionService;
@@ -72,5 +74,26 @@ export class EncryptionService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Hash a password using bcrypt
+   */
+  public async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, SALT_ROUNDS);
+  }
+
+  /**
+   * Verify a password against its hash
+   */
+  public async verifyPassword(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
+  }
+
+  /**
+   * Generate a secure random token (alias for generateToken)
+   */
+  public generateSecureToken(length: number = 32): string {
+    return this.generateToken(length);
   }
 }

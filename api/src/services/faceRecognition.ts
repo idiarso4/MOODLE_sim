@@ -11,7 +11,14 @@ const prisma = new PrismaClient();
 const modelPath = path.join(process.cwd(), 'models');
 
 // Initialize face-api
-faceapi.env.monkeyPatch({ Canvas, Image });
+const canvas = new Canvas(0, 0);
+const faceApiEnv = {
+  Canvas: Canvas as any,
+  Image: Image as any,
+  ImageData: (canvas.getContext('2d') as any).getImageData,
+  createCanvas: (width: number, height: number) => new Canvas(width, height),
+};
+faceapi.env.monkeyPatch(faceApiEnv);
 
 interface FaceDetectionResult {
   faceDetected: boolean;
@@ -25,6 +32,12 @@ interface VerificationResult {
   isMatch: boolean;
   confidence: number;
   error?: string;
+}
+
+interface FaceDescriptor {
+  filename: string;
+  descriptor: number[];
+  confidence: number;
 }
 
 export class FaceRecognitionService {
@@ -58,16 +71,26 @@ export class FaceRecognitionService {
     }
   }
 
+  private async bufferToImage(buffer: Buffer): Promise<HTMLImageElement> {
+    const img = new Image();
+    const blob = new Blob([buffer], { type: 'image/jpeg' });
+    return new Promise((resolve, reject) => {
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(blob);
+    });
+  }
+
   public async detectFace(imageBuffer: Buffer): Promise<FaceDetectionResult> {
     try {
       await this.loadModels();
 
       // Load image
-      const img = await faceapi.bufferToImage(imageBuffer);
+      const img = await this.bufferToImage(imageBuffer);
       
       // Detect face
       const detection = await faceapi
-        .detectSingleFace(img)
+        .detectSingleFace(img as any)
         .withFaceLandmarks()
         .withFaceDescriptor();
 
@@ -168,13 +191,10 @@ export class FaceRecognitionService {
 
       // Save face descriptor to database
       if (detection.descriptor) {
-        await prisma.faceDescriptor.create({
-          data: {
-            filename,
-            descriptor: Array.from(detection.descriptor),
-            confidence: detection.confidence || 0
-          }
-        });
+        await prisma.$executeRaw`
+          INSERT INTO "FaceDescriptor" (filename, descriptor, confidence)
+          VALUES (${filename}, ${Array.from(detection.descriptor)}, ${detection.confidence || 0})
+        `;
       }
 
       return filename;
@@ -188,15 +208,15 @@ export class FaceRecognitionService {
 
   public async getFaceDescriptor(filename: string): Promise<Float32Array | null> {
     try {
-      const descriptor = await prisma.faceDescriptor.findUnique({
-        where: { filename }
-      });
+      const result = await prisma.$queryRaw<FaceDescriptor[]>`
+        SELECT * FROM "FaceDescriptor" WHERE filename = ${filename} LIMIT 1
+      `;
 
-      if (!descriptor) {
+      if (!result || result.length === 0) {
         return null;
       }
 
-      return new Float32Array(descriptor.descriptor as number[]);
+      return new Float32Array(result[0].descriptor);
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Failed to get face descriptor: ${error.message}`);
