@@ -1,17 +1,23 @@
 import request from 'supertest';
 import { app } from '../app';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, User } from '@prisma/client';
 import { sign } from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
 
 describe('Authentication Tests', () => {
-  let testUser: any;
+  let testUser: User;
 
   beforeAll(async () => {
-    testUser = await prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: { email: 'test@example.com' }
     });
+    
+    if (!user) {
+      throw new Error('Test user not found');
+    }
+    
+    testUser = user;
   });
 
   describe('POST /auth/login', () => {
@@ -50,22 +56,23 @@ describe('Authentication Tests', () => {
       );
 
       const response = await request(app)
-        .get('/api/profile')
+        .get('/auth/profile')
         .set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('email', testUser.email);
     });
 
     it('should deny access without token', async () => {
       const response = await request(app)
-        .get('/api/profile');
+        .get('/auth/profile');
 
       expect(response.status).toBe(401);
     });
 
     it('should deny access with invalid token', async () => {
       const response = await request(app)
-        .get('/api/profile')
+        .get('/auth/profile')
         .set('Authorization', 'Bearer invalid-token');
 
       expect(response.status).toBe(401);

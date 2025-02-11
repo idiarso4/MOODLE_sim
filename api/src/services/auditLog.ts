@@ -1,8 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { Request } from 'express';
 
-const prisma = new PrismaClient();
-
 export interface AuditLogData {
   userId: string;
   action: string;
@@ -68,7 +66,7 @@ export class AuditLogService {
   }
 
   async createFromRequest(req: Request, action: string, resource: string, details: any = {}) {
-    const userId = req.user?.id || 'anonymous';
+    const userId = (req.user as any)?.id || 'anonymous';
     const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
@@ -122,13 +120,7 @@ export class AuditLogService {
         skip,
         take: limit,
         include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-              role: true
-            }
-          }
+          user: true
         }
       })
     ]);
