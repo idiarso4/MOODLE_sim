@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, AttendanceStatus } from '@prisma/client';
+import { authenticateToken } from '../middleware/auth';
+import { auditLogService } from '../services/auditLog';
 import { validateLocation } from '../services/location';
 import { uploadImage } from '../services/faceRecognition';
 import { detectFaces } from '../services/faceRecognition';
@@ -10,13 +12,6 @@ const router = Router();
 const prisma = new PrismaClient();
 
 // Define local enums since they are not exported from @prisma/client
-enum AttendanceStatus {
-  PRESENT,
-  ABSENT,
-  LATE,
-  EXCUSED
-}
-
 enum AttendanceMethod {
   MANUAL,
   AUTOMATIC,
@@ -59,12 +54,8 @@ interface AttendanceRecord {
 }
 
 // Mark attendance using face recognition
-router.post('/face', async (req: Request, res: Response) => {
+router.post('/face', authenticateToken, async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
     const { sessionId, image, location }: FaceAttendanceRequest = req.body;
     const userId: string = req.user.id;
 
@@ -121,12 +112,8 @@ router.post('/face', async (req: Request, res: Response) => {
 });
 
 // Mark attendance using QR code
-router.post('/qr', async (req: Request, res: Response) => {
+router.post('/qr', authenticateToken, async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
     const { qrCode, location }: QRAttendanceRequest = req.body;
     const userId: string = req.user.id;
 
@@ -170,12 +157,8 @@ router.post('/qr', async (req: Request, res: Response) => {
 });
 
 // Get attendance report
-router.get('/report', async (req: Request, res: Response) => {
+router.get('/report', authenticateToken, async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
     const query: AttendanceQuery = req.query as unknown as AttendanceQuery;
     const { classId, startDate, endDate }: AttendanceQuery = query;
     
@@ -249,6 +232,174 @@ router.get('/report', async (req: Request, res: Response) => {
     }
     console.error('Report generation error:', error);
     return res.status(400).json({ error: 'An unknown error occurred' });
+  }
+});
+
+// Get attendance records for a class
+router.get('/class/:classId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { classId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        session: {
+          schedule: {
+            classId
+          },
+          date: {
+            gte: startDate ? new Date(startDate as string) : undefined,
+            lte: endDate ? new Date(endDate as string) : undefined
+          }
+        }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        session: {
+          include: {
+            schedule: true
+          }
+        }
+      }
+    });
+
+    // Calculate statistics
+    const stats = {
+      total: attendances.length,
+      present: attendances.filter(a => a.status === AttendanceStatus.PRESENT).length,
+      late: attendances.filter(a => a.status === AttendanceStatus.LATE).length,
+      absent: attendances.filter(a => a.status === AttendanceStatus.ABSENT).length,
+      excused: attendances.filter(a => a.status === AttendanceStatus.EXCUSED).length
+    };
+
+    res.json({ attendances, stats });
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
+    }
+  }
+});
+
+// Get attendance records for a student
+router.get('/student/:studentId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { studentId } = req.params;
+    const { classId, startDate, endDate } = req.query;
+
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        userId: studentId,
+        session: {
+          schedule: {
+            classId: classId as string
+          },
+          date: {
+            gte: startDate ? new Date(startDate as string) : undefined,
+            lte: endDate ? new Date(endDate as string) : undefined
+          }
+        }
+      },
+      include: {
+        session: {
+          include: {
+            schedule: true
+          }
+        }
+      }
+    });
+
+    res.json(attendances);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
+    }
+  }
+});
+
+// Record attendance
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { sessionId, userId, status, method, location, imageUrl } = req.body;
+
+    const attendance = await prisma.attendance.create({
+      data: {
+        sessionId,
+        userId,
+        status,
+        method,
+        location,
+        imageUrl
+      }
+    });
+
+    // Log attendance record
+    await auditLogService.createFromRequest(
+      req,
+      'ATTENDANCE_RECORD',
+      'attendance',
+      {
+        sessionId,
+        userId,
+        status,
+        method
+      }
+    );
+
+    res.json(attendance);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
+    }
+  }
+});
+
+// Update attendance record
+router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, method, location, imageUrl } = req.body;
+
+    const attendance = await prisma.attendance.update({
+      where: { id },
+      data: {
+        status,
+        method,
+        location,
+        imageUrl
+      }
+    });
+
+    // Log attendance update
+    await auditLogService.createFromRequest(
+      req,
+      'ATTENDANCE_UPDATE',
+      'attendance',
+      {
+        id,
+        status,
+        method
+      }
+    );
+
+    res.json(attendance);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
+    }
   }
 });
 

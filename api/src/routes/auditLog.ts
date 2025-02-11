@@ -1,32 +1,32 @@
 import { Router } from 'express';
-import { authenticateToken, authorizeRoles } from '../middleware/auth';
-import { getAuditLogs } from '../services/auditLog';
+import { auditLogService } from '../services/auditLog';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-// Get audit logs (admin only)
-router.get('/', 
-  authenticateToken,
-  authorizeRoles(['ADMIN']),
-  async (req, res) => {
-    try {
-      const filters = {
-        userId: req.query.userId as string,
-        action: req.query.action as string,
-        resource: req.query.resource as string,
-        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
-        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
-        page: req.query.page ? parseInt(req.query.page as string) : 1,
-        limit: req.query.limit ? parseInt(req.query.limit as string) : 10
-      };
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const { userId, action, resource, startDate, endDate, page, limit } = req.query;
 
-      const logs = await getAuditLogs(filters);
-      res.json(logs);
-    } catch (error) {
-      console.error('Error fetching audit logs:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    const filters = {
+      userId: userId as string,
+      action: action as string,
+      resource: resource as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined
+    };
+
+    const result = await auditLogService.getLogs(filters);
+    res.json(result);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
     }
   }
-);
+});
 
 export default router;

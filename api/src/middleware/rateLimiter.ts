@@ -1,71 +1,50 @@
-import rateLimit from 'express-rate-limit';
-import { Request, Response } from 'express';
-import { createAuditLog } from '../services/auditLog';
+import { Request, Response, NextFunction } from 'express';
+import { auditLogService } from '../services/auditLog';
 
-// Base rate limiter configuration
-const createLimiter = (options: {
-  windowMs: number;
-  max: number;
-  message: string;
-  resource: string;
-}) => {
-  return rateLimit({
-    windowMs: options.windowMs,
-    max: options.max,
-    message: { error: options.message },
-    standardHeaders: true,
-    legacyHeaders: false,
-    handler: (req: Request, res: Response) => {
-      // Log rate limit exceeded
-      createAuditLog(req, 'RATE_LIMIT_EXCEEDED', options.resource, {
-        ip: req.ip,
-        path: req.path
-      });
-      
-      res.status(429).json({ 
-        error: options.message,
-        retryAfter: Math.ceil(options.windowMs / 1000)
-      });
+// Simple in-memory rate limiter
+const requestCounts = new Map<string, { count: number; resetTime: number }>();
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_REQUESTS = 100; // Maximum requests per window
+
+export function rateLimiter(req: Request, res: Response, next: NextFunction) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+
+  // Clean up old entries
+  for (const [key, value] of requestCounts.entries()) {
+    if (now > value.resetTime) {
+      requestCounts.delete(key);
     }
-  });
-};
+  }
 
-// General API rate limit
-export const apiLimiter = createLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later',
-  resource: 'API'
-});
+  // Get or create rate limit info for this IP
+  let rateLimit = requestCounts.get(ip);
+  if (!rateLimit) {
+    rateLimit = {
+      count: 0,
+      resetTime: now + WINDOW_MS
+    };
+    requestCounts.set(ip, rateLimit);
+  }
 
-// Authentication rate limit
-export const authLimiter = createLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // Limit each IP to 5 login attempts per hour
-  message: 'Too many login attempts from this IP, please try again later',
-  resource: 'AUTH'
-});
+  // Check if limit exceeded
+  if (rateLimit.count >= MAX_REQUESTS) {
+    // Log rate limit exceeded
+    auditLogService.createFromRequest(req, 'RATE_LIMIT_EXCEEDED', 'api');
 
-// Face recognition rate limit
-export const faceRecognitionLimiter = createLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10, // Limit each IP to 10 face recognition attempts per minute
-  message: 'Too many face recognition attempts, please try again later',
-  resource: 'FACE_RECOGNITION'
-});
+    return res.status(429).json({
+      error: 'Too many requests',
+      retryAfter: Math.ceil((rateLimit.resetTime - now) / 1000)
+    });
+  }
 
-// QR Code rate limit
-export const qrCodeLimiter = createLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // Limit each IP to 30 QR code scans per minute
-  message: 'Too many QR code scans, please try again later',
-  resource: 'QR_CODE'
-});
+  // Increment request count
+  rateLimit.count++;
 
-// Export rate limit
-export const exportLimiter = createLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // Limit each IP to 10 exports per hour
-  message: 'Export limit reached, please try again later',
-  resource: 'EXPORT'
-});
+  // Set rate limit headers
+  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS);
+  res.setHeader('X-RateLimit-Remaining', MAX_REQUESTS - rateLimit.count);
+  res.setHeader('X-RateLimit-Reset', Math.ceil(rateLimit.resetTime / 1000));
+
+  next();
+}

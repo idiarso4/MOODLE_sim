@@ -1,53 +1,47 @@
 import { Request, Response, NextFunction } from 'express';
-import { 
-  httpRequestDurationMicroseconds, 
-  totalRequests, 
-  apiErrors 
-} from '../services/metrics';
+import { performance } from 'perf_hooks';
 
-export const metricsMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // Start timer
-  const start = process.hrtime();
+export function metricsMiddleware(req: Request, res: Response, next: NextFunction) {
+  const start = performance.now();
 
-  // Record original end function
+  // Store original end function
   const originalEnd = res.end;
+  const originalJson = res.json;
 
-  // Override end function
-  res.end = function(...args: any[]) {
-    // Calculate duration
-    const dur = process.hrtime(start);
-    const duration = dur[0] + dur[1] / 1e9;
+  // Track response size
+  let responseSize = 0;
 
-    // Get route from originalUrl, fallback to path if not available
-    const route = req.route ? req.route.path : req.originalUrl;
+  // Override json method to track response size
+  res.json = function(body: any) {
+    if (body) {
+      responseSize = JSON.stringify(body).length;
+    }
+    return originalJson.apply(res, arguments as any);
+  };
 
-    // Increment total requests counter
-    totalRequests.inc({
-      method: req.method,
-      route,
-      status_code: res.statusCode
-    });
+  // Override end method
+  res.end = function(chunk?: any, encoding?: string, callback?: () => void) {
+    const duration = performance.now() - start;
 
-    // Observe request duration
-    httpRequestDurationMicroseconds.observe(
-      {
-        method: req.method,
-        route,
-        status_code: res.statusCode
-      },
-      duration
-    );
-
-    // If error occurred (status >= 400)
-    if (res.statusCode >= 400) {
-      apiErrors.inc({
-        route,
-        error_type: res.statusCode >= 500 ? 'server_error' : 'client_error'
-      });
+    // If chunk is provided, add to response size
+    if (chunk) {
+      responseSize += chunk.length;
     }
 
-    originalEnd.apply(res, args);
+    // Log metrics
+    console.log({
+      timestamp: new Date().toISOString(),
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      duration: `${duration.toFixed(2)}ms`,
+      responseSize: `${responseSize} bytes`,
+      userAgent: req.headers['user-agent'] || 'unknown'
+    });
+
+    // Call original end
+    return originalEnd.apply(res, [chunk, encoding, callback]);
   };
 
   next();
-};
+}

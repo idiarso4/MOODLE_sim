@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, AuditLog } from '@prisma/client';
 import { Request } from 'express';
 
 export interface AuditLogData {
@@ -13,7 +13,7 @@ export interface AuditLogData {
 export class AuditLogService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(data: AuditLogData) {
+  async create(data: AuditLogData): Promise<AuditLog> {
     try {
       return await this.prisma.auditLog.create({
         data: {
@@ -32,28 +32,28 @@ export class AuditLogService {
     }
   }
 
-  async getByUserId(userId: string) {
+  async getByUserId(userId: string): Promise<AuditLog[]> {
     return this.prisma.auditLog.findMany({
       where: { userId },
       orderBy: { timestamp: 'desc' }
     });
   }
 
-  async getByResource(resource: string) {
+  async getByResource(resource: string): Promise<AuditLog[]> {
     return this.prisma.auditLog.findMany({
       where: { resource },
       orderBy: { timestamp: 'desc' }
     });
   }
 
-  async getByAction(action: string) {
+  async getByAction(action: string): Promise<AuditLog[]> {
     return this.prisma.auditLog.findMany({
       where: { action },
       orderBy: { timestamp: 'desc' }
     });
   }
 
-  async getByTimeRange(startDate: Date, endDate: Date) {
+  async getByTimeRange(startDate: Date, endDate: Date): Promise<AuditLog[]> {
     return this.prisma.auditLog.findMany({
       where: {
         timestamp: {
@@ -65,7 +65,7 @@ export class AuditLogService {
     });
   }
 
-  async createFromRequest(req: Request, action: string, resource: string, details: any = {}) {
+  async createFromRequest(req: Request, action: string, resource: string, details: any = {}): Promise<AuditLog> {
     const userId = (req.user as any)?.id || 'anonymous';
     const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
@@ -120,7 +120,13 @@ export class AuditLogService {
         skip,
         take: limit,
         include: {
-          user: true
+          user: {
+            select: {
+              name: true,
+              email: true,
+              role: true
+            }
+          }
         }
       })
     ]);
