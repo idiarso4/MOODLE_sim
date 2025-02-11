@@ -1,58 +1,144 @@
-import { Router } from 'express';
-import { ScheduleService } from '../services/ScheduleService';
-import { authenticateToken, authorizeRoles } from '../middleware/auth';
+import { Router, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { authenticateToken } from '../middleware/auth';
+import { auditLogService } from '../services/auditLog';
 
 const router = Router();
-const scheduleService = new ScheduleService();
+const prisma = new PrismaClient();
 
-// Create schedule
-router.post('/',
-    authenticateToken,
-    authorizeRoles(['ADMIN', 'TEACHER']),
-    async (req, res) => {
-        try {
-            const schedule = await scheduleService.createSchedule(req.body);
-            res.status(201).json(schedule);
-        } catch (error) {
-            res.status(400).json({ error: error.message });
-        }
-    }
-);
+// Get schedules for a class
+router.get('/class/:classId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { classId } = req.params;
 
-// Generate sessions
-router.post('/:id/sessions',
-    authenticateToken,
-    authorizeRoles(['ADMIN', 'TEACHER']),
-    async (req, res) => {
-        try {
-            const { startDate, endDate } = req.body;
-            const sessions = await scheduleService.generateSessions(
-                req.params.id,
-                new Date(startDate),
-                new Date(endDate)
-            );
-            res.status(201).json(sessions);
-        } catch (error) {
-            res.status(400).json({ error: error.message });
+    const schedules = await prisma.schedule.findMany({
+      where: {
+        classId
+      },
+      include: {
+        class: true,
+        sessions: {
+          include: {
+            attendances: true
+          }
         }
-    }
-);
+      }
+    });
 
-// Update schedule
-router.put('/:id',
-    authenticateToken,
-    authorizeRoles(['ADMIN', 'TEACHER']),
-    async (req, res) => {
-        try {
-            const schedule = await scheduleService.updateSchedule(
-                req.params.id,
-                req.body
-            );
-            res.json(schedule);
-        } catch (error) {
-            res.status(400).json({ error: error.message });
-        }
+    res.json(schedules);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
     }
-);
+  }
+});
+
+// Create a new schedule
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { classId, dayOfWeek, startTime, endTime, room } = req.body;
+
+    const schedule = await prisma.schedule.create({
+      data: {
+        classId,
+        dayOfWeek,
+        startTime,
+        endTime,
+        room
+      }
+    });
+
+    // Log schedule creation
+    await auditLogService.createFromRequest(
+      req,
+      'CREATE_SCHEDULE',
+      'schedule',
+      {
+        classId,
+        dayOfWeek,
+        startTime,
+        endTime,
+        room
+      }
+    );
+
+    res.json(schedule);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
+    }
+  }
+});
+
+// Update a schedule
+router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { dayOfWeek, startTime, endTime, room } = req.body;
+
+    const schedule = await prisma.schedule.update({
+      where: { id },
+      data: {
+        dayOfWeek,
+        startTime,
+        endTime,
+        room
+      }
+    });
+
+    // Log schedule update
+    await auditLogService.createFromRequest(
+      req,
+      'UPDATE_SCHEDULE',
+      'schedule',
+      {
+        id,
+        dayOfWeek,
+        startTime,
+        endTime,
+        room
+      }
+    );
+
+    res.json(schedule);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
+    }
+  }
+});
+
+// Delete a schedule
+router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const schedule = await prisma.schedule.delete({
+      where: { id }
+    });
+
+    // Log schedule deletion
+    await auditLogService.createFromRequest(
+      req,
+      'DELETE_SCHEDULE',
+      'schedule',
+      { id }
+    );
+
+    res.json(schedule);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'An unknown error occurred' });
+    }
+  }
+});
 
 export default router;

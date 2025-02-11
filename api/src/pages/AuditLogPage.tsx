@@ -1,46 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
+import { Table, Input, DatePicker, Select, Space, Button, Tag } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
+import moment from 'moment';
+import { AuditLog } from '../types/auditLog';
+import { auditLogService } from '../services/auditLog';
 
-const AuditLogPage = () => {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 7)),
-    endDate: new Date(),
-    userId: '',
-    action: '',
-    resource: '',
-    page: 1
-  });
+const { RangePicker } = DatePicker;
+const { Option } = Select;
 
-  useEffect(() => {
-    fetchLogs();
-  }, [filters]);
+interface FilterParams {
+  startDate?: string;
+  endDate?: string;
+  action?: string;
+  resource?: string;
+  userId?: string;
+}
 
-  const fetchLogs = async () => {
+const AuditLogPage: React.FC = () => {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [filters, setFilters] = useState<FilterParams>({});
+
+  const fetchLogs = async (params: FilterParams = {}) => {
     try {
       setLoading(true);
-      const queryParams = new URLSearchParams({
-        startDate: filters.startDate.toISOString(),
-        endDate: filters.endDate.toISOString(),
-        page: filters.page.toString(),
-        ...(filters.userId && { userId: filters.userId }),
-        ...(filters.action && { action: filters.action }),
-        ...(filters.resource && { resource: filters.resource })
-      });
-
-      const response = await fetch(`/api/audit-logs?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch logs');
-      
-      const data = await response.json();
-      setLogs(data.logs);
+      const response = await auditLogService.getLogs(params);
+      setLogs(response.data);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
     } finally {
@@ -48,168 +33,160 @@ const AuditLogPage = () => {
     }
   };
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value,
-      page: 1 // Reset page when filters change
-    }));
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const handleDateChange = (dates: any) => {
+    if (!dates) {
+      const { startDate, endDate, ...rest } = filters;
+      setFilters(rest);
+      return;
+    }
+
+    setFilters({
+      ...filters,
+      startDate: dates[0].toISOString(),
+      endDate: dates[1].toISOString(),
+    });
   };
 
+  const handleActionChange = (value: string) => {
+    if (!value) {
+      const { action, ...rest } = filters;
+      setFilters(rest);
+      return;
+    }
+
+    setFilters({
+      ...filters,
+      action: value,
+    });
+  };
+
+  const handleResourceChange = (value: string) => {
+    if (!value) {
+      const { resource, ...rest } = filters;
+      setFilters(rest);
+      return;
+    }
+
+    setFilters({
+      ...filters,
+      resource: value,
+    });
+  };
+
+  const handleSearch = () => {
+    fetchLogs(filters);
+  };
+
+  const handleReset = () => {
+    setFilters({});
+    fetchLogs();
+  };
+
+  const columns = [
+    {
+      title: 'Timestamp',
+      dataIndex: 'timestamp',
+      key: 'timestamp',
+      render: (text: string) => moment(text).format('YYYY-MM-DD HH:mm:ss'),
+      sorter: (a: AuditLog, b: AuditLog) => moment(a.timestamp).unix() - moment(b.timestamp).unix(),
+    },
+    {
+      title: 'Action',
+      dataIndex: 'action',
+      key: 'action',
+      render: (text: string) => (
+        <Tag color={text.includes('ERROR') ? 'error' : 'processing'}>{text}</Tag>
+      ),
+    },
+    {
+      title: 'Resource',
+      dataIndex: 'resource',
+      key: 'resource',
+    },
+    {
+      title: 'User ID',
+      dataIndex: 'userId',
+      key: 'userId',
+    },
+    {
+      title: 'IP Address',
+      dataIndex: 'ipAddress',
+      key: 'ipAddress',
+    },
+    {
+      title: 'Details',
+      dataIndex: 'details',
+      key: 'details',
+      render: (details: any) => (
+        <pre style={{ maxHeight: '100px', overflow: 'auto' }}>
+          {JSON.stringify(details, null, 2)}
+        </pre>
+      ),
+    },
+  ];
+
   return (
-    <div className="audit-log-page">
+    <div style={{ padding: '24px' }}>
       <h1>Audit Logs</h1>
-
-      <div className="filters">
-        <div className="filter-group">
-          <label>Date Range:</label>
-          <DatePicker
-            selectsRange={true}
-            startDate={filters.startDate}
-            endDate={filters.endDate}
-            onChange={([start, end]) => {
-              handleFilterChange('startDate', start);
-              handleFilterChange('endDate', end);
-            }}
-            dateFormat="dd/MM/yyyy"
-          />
-        </div>
-
-        <div className="filter-group">
-          <label>User ID:</label>
-          <input
-            type="text"
-            value={filters.userId}
-            onChange={(e) => handleFilterChange('userId', e.target.value)}
-            placeholder="Filter by user ID"
-          />
-        </div>
-
-        <div className="filter-group">
-          <label>Action:</label>
-          <select
-            value={filters.action}
-            onChange={(e) => handleFilterChange('action', e.target.value)}
-          >
-            <option value="">All Actions</option>
-            <option value="LOGIN">Login</option>
-            <option value="ATTENDANCE">Attendance</option>
-            <option value="EXPORT">Export</option>
-            <option value="UPDATE">Update</option>
-          </select>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="loading">Loading...</div>
-      ) : (
-        <div className="logs-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>User</th>
-                <th>Action</th>
-                <th>Resource</th>
-                <th>IP Address</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={log.id}>
-                  <td>{format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss')}</td>
-                  <td>
-                    {log.user.name}
-                    <br />
-                    <small>{log.user.email}</small>
-                  </td>
-                  <td>{log.action}</td>
-                  <td>{log.resource}</td>
-                  <td>{log.ipAddress}</td>
-                  <td>
-                    <pre>{JSON.stringify(JSON.parse(log.details), null, 2)}</pre>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <style jsx>{`
-        .audit-log-page {
-          padding: 20px;
-          max-width: 1400px;
-          margin: 0 auto;
-        }
-
-        .filters {
-          display: flex;
-          gap: 20px;
-          margin-bottom: 30px;
-          flex-wrap: wrap;
-        }
-
-        .filter-group {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .filter-group label {
-          font-weight: 500;
-        }
-
-        .filter-group input,
-        .filter-group select {
-          padding: 8px 12px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          min-width: 200px;
-        }
-
-        .logs-table {
-          overflow-x: auto;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-
-        th, td {
-          padding: 12px;
-          text-align: left;
-          border-bottom: 1px solid #ddd;
-        }
-
-        th {
-          background: #f8f9fa;
-        }
-
-        pre {
-          margin: 0;
-          white-space: pre-wrap;
-          font-size: 12px;
-        }
-
-        .loading {
-          text-align: center;
-          padding: 40px;
-        }
-
-        @media (max-width: 768px) {
-          .filters {
-            flex-direction: column;
-          }
-
-          .filter-group input,
-          .filter-group select {
-            width: 100%;
-          }
-        }
-      `}</style>
+      <Space style={{ marginBottom: '16px' }} size="middle">
+        <RangePicker
+          onChange={handleDateChange}
+          value={filters.startDate && filters.endDate ? [
+            moment(filters.startDate),
+            moment(filters.endDate),
+          ] : undefined}
+        />
+        <Select
+          style={{ width: 200 }}
+          placeholder="Select Action"
+          allowClear
+          onChange={handleActionChange}
+          value={filters.action}
+        >
+          <Option value="LOGIN">LOGIN</Option>
+          <Option value="LOGOUT">LOGOUT</Option>
+          <Option value="CREATE">CREATE</Option>
+          <Option value="UPDATE">UPDATE</Option>
+          <Option value="DELETE">DELETE</Option>
+          <Option value="ERROR">ERROR</Option>
+        </Select>
+        <Select
+          style={{ width: 200 }}
+          placeholder="Select Resource"
+          allowClear
+          onChange={handleResourceChange}
+          value={filters.resource}
+        >
+          <Option value="user">User</Option>
+          <Option value="attendance">Attendance</Option>
+          <Option value="class">Class</Option>
+          <Option value="schedule">Schedule</Option>
+        </Select>
+        <Button
+          type="primary"
+          icon={<SearchOutlined />}
+          onClick={handleSearch}
+        >
+          Search
+        </Button>
+        <Button onClick={handleReset}>Reset</Button>
+      </Space>
+      <Table
+        columns={columns}
+        dataSource={logs}
+        loading={loading}
+        rowKey="id"
+        pagination={{
+          total: logs.length,
+          pageSize: 10,
+          showSizeChanger: true,
+          showQuickJumper: true,
+        }}
+      />
     </div>
   );
 };
